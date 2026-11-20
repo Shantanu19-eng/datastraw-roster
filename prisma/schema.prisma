@@ -1,0 +1,432 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaveType {
+  PLANNED
+  SICK
+  COMP_OFF
+  UNAVAILABILITY
+}
+
+enum OperatingType {
+  TYPE_A_365
+  TYPE_B_DAILY_NO_HOLIDAY
+  TYPE_C_WEEKDAY_WEEKEND
+}
+
+enum RosterStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EntryStatus {
+  WORKING
+  WEEKLY_OFF
+  PUBLIC_HOLIDAY
+  LEAVE
+  COMP_OFF
+  UNASSIGNED
+}
+
+enum ConflictSeverity {
+  CRITICAL
+  WARNING
+  INFORMATIONAL
+}
+
+enum ConflictStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum UserRole {
+  ADMIN
+  OPERATIONS_MANAGER
+  POD_LEAD
+  EMPLOYEE
+}
+
+enum BackupRecommendationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Pod {
+  id        String     @id @default(cuid())
+  podCode   String     @unique
+  name      String
+  leadId    String?    @unique
+  lead      Employee?  @relation("PodLead", fields: [leadId], references: [id])
+  employees Employee[] @relation("PodEmployees")
+  brands    Brand[]
+  processes Process[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([name])
+}
+
+model Employee {
+  id                         String                      @id @default(cuid())
+  employeeCode               String                      @unique
+  fullName                   String
+  email                      String                      @unique
+  phone                      String?
+  role                       String
+  joiningDate                DateTime
+  status                     EmployeeStatus              @default(ACTIVE)
+  preferredOff               Int                         @default(0)
+  podId                      String?
+  pod                        Pod?                        @relation("PodEmployees", fields: [podId], references: [id])
+  ledPod                     Pod?                        @relation("PodLead")
+  brandAssignments           EmployeeBrandAssignment[]
+  processAssignments         EmployeeProcessAssignment[]
+  weeklyOffs                 WeeklyOff[]
+  leaves                     LeaveRequest[]
+  availabilities             Availability[]
+  rosterEntries              RosterEntry[]
+  conflicts                  Conflict[]
+  userAccount                UserAccount?
+  unavailableRecommendations BackupRecommendation[]      @relation("UnavailableEmployee")
+  backupRecommendations      BackupRecommendation[]      @relation("BackupEmployee")
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+
+  @@index([podId, status])
+  @@index([fullName])
+}
+
+model Brand {
+  id             String                    @id @default(cuid())
+  brandCode      String                    @unique
+  name           String
+  description    String?
+  active         Boolean                   @default(true)
+  podId          String?
+  pod            Pod?                      @relation(fields: [podId], references: [id])
+  assignments    EmployeeBrandAssignment[]
+  processes      Process[]
+  holidays       Holiday[]
+  operatingRules OperatingRule[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@index([podId, active])
+}
+
+model Process {
+  id                    String                      @id @default(cuid())
+  processCode           String                      @unique
+  name                  String
+  description           String?
+  brandId               String
+  brand                 Brand                       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  podId                 String?
+  pod                   Pod?                        @relation(fields: [podId], references: [id])
+  active                Boolean                     @default(true)
+  minimumStaffing       Int                         @default(1)
+  assignments           EmployeeProcessAssignment[]
+  operatingRules        OperatingRule[]
+  coverageRequirements  CoverageRequirement[]
+  rosterEntries         RosterEntry[]
+  conflicts             Conflict[]
+  backupRecommendations BackupRecommendation[]
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  @@index([brandId, active])
+  @@index([podId])
+}
+
+model EmployeeBrandAssignment {
+  id         String   @id @default(cuid())
+  employeeId String
+  brandId    String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  brand      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([employeeId, brandId])
+  @@index([brandId])
+}
+
+model EmployeeProcessAssignment {
+  id         String   @id @default(cuid())
+  employeeId String
+  processId  String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  process    Process  @relation(fields: [processId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([employeeId, processId])
+  @@index([processId])
+}
+
+model OperatingRule {
+  id            String        @id @default(cuid())
+  brandId       String?
+  processId     String?
+  brand         Brand?        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  process       Process?      @relation(fields: [processId], references: [id], onDelete: Cascade)
+  operatingType OperatingType
+  weeklyDays    Int[]
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([brandId, effectiveFrom])
+  @@index([processId, effectiveFrom])
+}
+
+model CoverageRequirement {
+  id            String    @id @default(cuid())
+  processId     String
+  process       Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  weekday       Int
+  minimumStaff  Int
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([processId, weekday, effectiveFrom])
+  @@index([processId, weekday])
+}
+
+model WeeklyOff {
+  id            String    @id @default(cuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  weekday       Int
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([employeeId, weekday, effectiveFrom])
+  @@index([employeeId, weekday])
+}
+
+model Holiday {
+  id        String   @id @default(cuid())
+  brandId   String?
+  brand     Brand?   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name      String
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([brandId, date])
+  @@index([date])
+}
+
+model LeaveRequest {
+  id         String      @id @default(cuid())
+  employeeId String
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType  LeaveType
+  startDate  DateTime
+  endDate    DateTime
+  reason     String?
+  status     LeaveStatus @default(PENDING)
+  approvedBy String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([employeeId, status, startDate])
+  @@index([status, startDate])
+}
+
+model Availability {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  available  Boolean
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@unique([employeeId, date])
+  @@index([date, available])
+}
+
+model Shift {
+  id        String   @id @default(cuid())
+  name      String
+  startTime String
+  endTime   String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Roster {
+  id                    String                 @id @default(cuid())
+  month                 Int
+  year                  Int
+  status                RosterStatus           @default(DRAFT)
+  publishedAt           DateTime?
+  entries               RosterEntry[]
+  versions              RosterVersion[]
+  conflicts             Conflict[]
+  backupRecommendations BackupRecommendation[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([month, year, status])
+  @@index([year, month, status])
+}
+
+model RosterEntry {
+  id                    String                 @id @default(cuid())
+  rosterId              String
+  roster                Roster                 @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+  employeeId            String
+  employee              Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  processId             String?
+  process               Process?               @relation(fields: [processId], references: [id], onDelete: SetNull)
+  date                  DateTime
+  status                EntryStatus
+  brandCode             String?
+  notes                 String?
+  backupRecommendations BackupRecommendation[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([rosterId, employeeId, date, processId])
+  @@index([rosterId, date])
+  @@index([employeeId, date])
+  @@index([processId, date])
+}
+
+model RosterVersion {
+  id           String   @id @default(cuid())
+  rosterId     String
+  roster       Roster   @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+  version      Int
+  snapshotJson Json
+  createdBy    String?
+  createdAt    DateTime @default(now())
+
+  @@unique([rosterId, version])
+  @@index([rosterId, createdAt])
+}
+
+model Conflict {
+  id           String           @id @default(cuid())
+  rosterId     String?
+  roster       Roster?          @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+  employeeId   String?
+  employee     Employee?        @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  processId    String?
+  process      Process?         @relation(fields: [processId], references: [id], onDelete: SetNull)
+  date         DateTime
+  severity     ConflictSeverity
+  status       ConflictStatus   @default(OPEN)
+  conflictType String
+  description  String
+  reason       String
+  suggestion   String
+  brandCode    String?
+  createdAt    DateTime         @default(now())
+  resolvedAt   DateTime?
+
+  @@index([rosterId, status, severity])
+  @@index([date, status])
+  @@index([processId, severity])
+}
+
+model UserAccount {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  fullName     String
+  passwordHash String
+  role         UserRole
+  active       Boolean       @default(true)
+  employeeId   String?       @unique
+  employee     Employee?     @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  sessions     UserSession[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([role, active])
+}
+
+model UserSession {
+  id        String      @id @default(cuid())
+  tokenHash String      @unique
+  userId    String
+  user      UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime    @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model LoginThrottle {
+  emailHash       String    @id
+  attempts        Int       @default(0)
+  windowStartedAt DateTime
+  blockedUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+model BackupRecommendation {
+  id                    String                     @id @default(cuid())
+  rosterId              String
+  roster                Roster                     @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+  rosterEntryId         String
+  rosterEntry           RosterEntry                @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  unavailableEmployeeId String
+  unavailableEmployee   Employee                   @relation("UnavailableEmployee", fields: [unavailableEmployeeId], references: [id], onDelete: Restrict)
+  replacementEmployeeId String
+  replacementEmployee   Employee                   @relation("BackupEmployee", fields: [replacementEmployeeId], references: [id], onDelete: Restrict)
+  processId             String
+  process               Process                    @relation(fields: [processId], references: [id], onDelete: Restrict)
+  date                  DateTime
+  reason                String
+  status                BackupRecommendationStatus @default(PENDING)
+  createdByUserId       String?
+  decidedByUserId       String?
+  decisionReason        String?
+  createdAt             DateTime                   @default(now())
+  decidedAt             DateTime?
+
+  @@unique([rosterEntryId, replacementEmployeeId])
+  @@index([rosterId, date, status])
+  @@index([replacementEmployeeId, date, status])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actorName   String
+  action      String
+  entityType  String
+  entityId    String
+  details     Json
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+}
