@@ -20,13 +20,16 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const pathname = (await headers()).get("x-rosteriq-pathname") ?? "/";
-  const user = await getCurrentUser();
-  if (pathname === "/login") {
-    if (user) redirect("/");
-  } else if (!user) {
-    redirect("/login");
-  } else if (pathname === "/" && (user.role === UserRole.POD_LEAD || user.role === UserRole.EMPLOYEE)) {
-    redirect("/roster");
+  const isPublicDemo = pathname === "/demo";
+  const user = isPublicDemo ? null : await getCurrentUser();
+  if (!isPublicDemo) {
+    if (pathname === "/login") {
+      if (user) redirect("/");
+    } else if (!user) {
+      redirect("/login");
+    } else if (pathname === "/" && (user.role === UserRole.POD_LEAD || user.role === UserRole.EMPLOYEE)) {
+      redirect("/roster");
+    }
   }
 
   return (
@@ -36,7 +39,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full">
         <TooltipProvider>
-          {pathname === "/login" ? children : user ? (
+          {pathname === "/login" || isPublicDemo ? children : user ? (
             <AppShell user={{ fullName: user.fullName, role: user.role }}>{children}</AppShell>
           ) : children}
         </TooltipProvider>

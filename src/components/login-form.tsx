@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { login, type LoginState } from "@/actions/auth";
 
 const initialState: LoginState = { error: null };
@@ -25,6 +26,9 @@ export function LoginForm() {
       <button disabled={pending} className="h-10 w-full rounded-md bg-[#315EAA] text-sm font-semibold text-white disabled:opacity-60">
         {pending ? "Signing in..." : "Sign in"}
       </button>
+      <p className="text-center text-xs text-[#697586]">
+        Want a preview? <Link href="/demo" className="font-medium text-[#315EAA] hover:underline">View the public demo</Link>
+      </p>
     </form>
   );
 }

@@ -11,6 +11,7 @@ RosterIQ is a browser-based workforce roster management application designed for
 - Draft and published rosters, version snapshots, and CSV exports.
 - Validated manual employee assignments.
 - Database-backed authentication and secure sessions.
+- A public, read-only product preview at `/demo` using fictional data and no database access.
 - Role-based access control:
   - **Admin and Operations Manager:** Management access.
   - **Pod Lead:** Access restricted to their assigned pod.
@@ -130,6 +131,22 @@ Remove-Item Env:ADMIN_EMAIL, Env:ADMIN_NAME, Env:ADMIN_PASSWORD
 
 Use a unique password of at least 12 characters.
 
+### Reset an Existing Administrator Password
+
+If no current password is available, reset an Administrator directly from a trusted local environment with database access:
+
+```powershell
+$env:ADMIN_PASSWORD = "replace-with-a-new-unique-password-of-at-least-12-characters"
+# Optional when the workspace has more than one Admin account:
+$env:ADMIN_EMAIL = "admin@example.com"
+
+npm run auth:reset-admin-password
+
+Remove-Item Env:ADMIN_EMAIL, Env:ADMIN_PASSWORD
+```
+
+The command resets only an active Admin account, revokes that account's existing sessions, clears its login throttle, and does not log the password.
+
 Never commit or share the bootstrap password.
 
 ### Start the Application
@@ -141,6 +158,12 @@ npm run dev
 Open your browser and visit:
 
 http://localhost:3000
+
+The public, read-only preview is available at:
+
+http://localhost:3000/demo
+
+The home page and full workspace require sign-in. The demo is a separate, optional preview and does not replace the application.
 
 ## Useful Commands
 
@@ -176,6 +199,7 @@ The administrator variables are used during initial account creation. Do not sto
 There are no `NEXT_PUBLIC_*` database or authentication secrets.
 
 Authentication uses database sessions and secure production cookies.
+The `/demo` page is intentionally separate from authenticated application routes and displays only static fictional data. It does not read from the database or expose application actions.
 
 ## Database and Production Migrations
 
